@@ -25,11 +25,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #090d16; color: #f8fafc; }
-        .gradient-border {
-            background: linear-gradient(135deg, #8b5cf6, #3b82f6);
-            padding: 1px;
-            border-radius: 1rem;
-        }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     </style>
@@ -47,7 +42,7 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-lg text-white leading-tight">WebMedia Studio Pro</h1>
-                    <p class="text-xs text-slate-400">100% Offline Lossless Direct-Stream Slicing</p>
+                    <p class="text-xs text-slate-400">100% Offline Lossless Slicing Engine</p>
                 </div>
             </div>
             <div id="status-badge" class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-medium text-amber-400">
@@ -64,8 +59,8 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                 </svg>
             </div>
-            <h3 id="load-title" class="font-semibold text-base text-white mb-1">Preparing FFmpeg Engine</h3>
-            <p id="load-desc" class="text-xs text-slate-400 mb-4">Downloading core assets (approx 32MB) for future offline use...</p>
+            <h3 id="load-title" class="font-semibold text-base text-white mb-1">Downloading FFmpeg Engine</h3>
+            <p id="load-desc" class="text-xs text-slate-400 mb-4">Fetching core binaries from CDN and caching locally...</p>
             
             <div class="w-full bg-slate-800 rounded-full h-2.5 mb-2 overflow-hidden">
                 <div id="progress-bar-fill" class="bg-gradient-to-r from-purple-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
@@ -141,7 +136,7 @@
         <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl">
             <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-3">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span>Processed Outputs</span>
+                <span id="output-header-title">Processed Outputs</span>
             </div>
             <div id="output-container" class="text-center py-6 text-slate-500 text-xs italic border border-dashed border-slate-800 rounded-xl">
                 No processed media yet.
@@ -175,10 +170,11 @@
         import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
         import { toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
 
-        const CACHE_NAME = 'webmedia-ffmpeg-cache-v2';
+        const CACHE_NAME = 'webmedia-ffmpeg-storage-v3';
         const FILES = {
             js: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
-            wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm'
+            wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
+            worker: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.worker.js'
         };
 
         let ffmpeg = null;
@@ -193,6 +189,7 @@
             const uploadTitle = document.getElementById('upload-label-title');
             const dropText = document.getElementById('dropzone-text');
             const fileInput = document.getElementById('media-file-input');
+            const outputHeader = document.getElementById('output-header-title');
 
             if (mode === 'audio') {
                 btnAudio.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30";
@@ -200,12 +197,14 @@
                 uploadTitle.innerText = "Select Audio File";
                 dropText.innerText = "Tap to upload audio (MP3, WAV, AAC)";
                 fileInput.accept = "audio/*";
+                outputHeader.innerText = "Processed Audio Outputs";
             } else {
                 btnVideo.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30";
                 btnAudio.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all bg-[#131b2e] border border-slate-800 text-slate-400 hover:text-white hover:bg-[#1c2844]";
                 uploadTitle.innerText = "Select Video File";
                 dropText.innerText = "Tap to upload video (MP4, MKV, MOV)";
                 fileInput.accept = "video/*";
+                outputHeader.innerText = "Processed Video Outputs";
             }
             selectedFile = null;
             document.getElementById('file-chosen-name').innerText = "No file chosen";
@@ -234,38 +233,45 @@
                 const cache = await caches.open(CACHE_NAME);
                 let jsRes = !forceDownload ? await cache.match(FILES.js) : null;
                 let wasmRes = !forceDownload ? await cache.match(FILES.wasm) : null;
+                let workerRes = !forceDownload ? await cache.match(FILES.worker) : null;
 
-                if (!jsRes || !wasmRes) {
-                    statusTxt.innerText = "Downloading FFmpeg Core (32MB)...";
+                if (!jsRes || !wasmRes || !workerRes) {
+                    statusTxt.innerText = "Downloading FFmpeg Core Binaries (~32MB)...";
                     
-                    [jsRes, wasmRes] = await Promise.all([
+                    [jsRes, wasmRes, workerRes] = await Promise.all([
                         fetchWithProgress(FILES.js, cache, (p) => {
-                            fill.style.width = `${Math.round(p/2)}%`;
-                            pct.innerText = `${Math.round(p/2)}%`;
+                            fill.style.width = `${Math.round(p * 0.3)}%`;
+                            pct.innerText = `${Math.round(p * 0.3)}%`;
                         }),
                         fetchWithProgress(FILES.wasm, cache, (p) => {
-                            const val = 50 + Math.round(p/2);
+                            const val = 30 + Math.round(p * 0.6);
                             fill.style.width = `${val}%`;
                             pct.innerText = `${val}%`;
+                        }),
+                        fetchWithProgress(FILES.worker, cache, (p) => {
+                            fill.style.width = `100%`;
+                            pct.innerText = `100%`;
                         })
                     ]);
                 } else {
                     fill.style.width = '100%';
                     pct.innerText = '100%';
-                    statusTxt.innerText = "Loaded from local cache instantly!";
+                    statusTxt.innerText = "Loaded from browser storage instantly!";
                 }
 
-                statusTxt.innerText = "Initializing WASM module...";
+                statusTxt.innerText = "Initializing WebAssembly module...";
                 const jsBlob = await jsRes.blob();
                 const wasmBlob = await wasmRes.blob();
+                const workerBlob = await workerRes.blob();
 
                 const coreURL = URL.createObjectURL(jsBlob);
                 const wasmURL = URL.createObjectURL(wasmBlob);
+                const workerURL = URL.createObjectURL(workerBlob);
 
                 ffmpeg = new FFmpeg();
-                await ffmpeg.load({ coreURL, wasmURL });
+                await ffmpeg.load({ coreURL, wasmURL, workerURL });
 
-                // Ready UI
+                // Reveal Workspace
                 loadingOverlay.classList.add('hidden');
                 appWorkspace.classList.remove('hidden');
 
@@ -385,7 +391,7 @@
 
             if (action === 'redownload') {
                 title.innerText = "Redownload Resources";
-                desc.innerText = "This will clear your local FFmpeg cache and download fresh core files from CDN. Proceed?";
+                desc.innerText = "This will clear your local storage cache and download fresh FFmpeg binary files from CDN. Proceed?";
                 confirmBtn.className = "py-2.5 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 transition-colors";
             } else {
                 title.innerText = "Reset Application Cache";
@@ -411,7 +417,7 @@
             }
         };
 
-        // Run initialization on load
+        // Initialize application on load
         initFFmpegEngine();
     </script>
 </body>
