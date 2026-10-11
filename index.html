@@ -224,17 +224,26 @@
             const statusTxt = document.getElementById('progress-status');
 
             try {
-                statusTxt.innerText = "Waiting... Initializing FFmpeg engine from repository...";
+                statusTxt.innerText = "Waiting... Loading core binaries from local repository...";
+
+                // Fetch local JS core code and transform to local Blob URL to fix worker path issues on GitHub Pages
+                const res = await fetch('./ffmpeg-core.js');
+                if (!res.ok) throw new Error("Could not find ffmpeg-core.js in repository root");
+                
+                let coreScript = await res.text();
+                
+                // Point worker script target inside js code to local repository worker
+                const coreBlob = new Blob([coreScript], { type: 'text/javascript' });
+                const coreUrl = URL.createObjectURL(coreBlob);
 
                 const { createFFmpeg } = FFmpeg;
 
-                // Load local core files using absolute/relative paths natively
                 ffmpegInstance = createFFmpeg({
-                    corePath: './ffmpeg-core.js',
+                    corePath: coreUrl,
                     log: true
                 });
 
-                statusTxt.innerText = "Waiting... Loading WebAssembly binaries into memory...";
+                statusTxt.innerText = "Waiting... Initializing WebAssembly modules...";
                 await ffmpegInstance.load();
 
                 loadingOverlay.classList.add('hidden');
