@@ -4,47 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebMedia Studio Pro</title>
-    
-    <!-- Automatic Cross-Origin Isolation (Fixes SharedArrayBuffer on GitHub Pages) -->
-    <script>
-        if (!window.crossOriginIsolated && !window.coiInjected) {
-            window.coiInjected = true;
-            const coiScript = `
-            self.addEventListener("install", () => self.skipWaiting());
-            self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
-            self.addEventListener("fetch", (event) => {
-                if (event.request.cache === "only-if-cached" && event.request.mode !== "same-origin") return;
-                event.respondWith(
-                    fetch(event.request).then((response) => {
-                        if (response.status === 0) return response;
-                        const newHeaders = new Headers(response.headers);
-                        newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
-                        newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
-                        return new Response(response.body, {
-                            status: response.status,
-                            statusText: response.statusText,
-                            headers: newHeaders,
-                        });
-                    }).catch((err) => console.error(err))
-                );
-            });`;
-            
-            if ('serviceWorker' in navigator) {
-                const blob = new Blob([coiScript], { type: 'application/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                navigator.serviceWorker.register(blobUrl).then((reg) => {
-                    reg.addEventListener('updatefound', () => {
-                        window.location.reload();
-                    });
-                    if (reg.active && !navigator.serviceWorker.controller) {
-                        window.location.reload();
-                    }
-                }).catch(err => console.warn('COI SW registration error:', err));
-            }
-        }
-    </script>
 
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -72,7 +32,6 @@
 </head>
 <body class="min-h-screen pb-12 flex flex-col items-center">
 
-    <!-- Top Header Navigation Bar -->
     <div class="w-full max-w-md px-4 pt-6">
         <header class="bg-[#131b2e] border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-xl">
             <div class="flex items-center space-x-3">
@@ -94,7 +53,6 @@
         </header>
     </div>
 
-    <!-- Initial Loading Overlay -->
     <div id="loading-overlay" class="w-full max-w-md px-4 mt-6">
         <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
             <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
@@ -111,7 +69,6 @@
         </div>
     </div>
 
-    <!-- Main Workspace Workspace Area -->
     <main id="app-workspace" class="w-full max-w-md px-4 mt-6 space-y-4 hidden">
         
         <!-- Navigation Tabs: Audio vs Video -->
@@ -192,7 +149,6 @@
 
     </main>
 
-    <!-- Custom Modal Dialog (Replaces alert/confirm) -->
     <div id="custom-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-[#131b2e] border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
             <div id="modal-icon" class="w-12 h-12 mx-auto mb-3 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
@@ -207,9 +163,8 @@
         </div>
     </div>
 
-    <!-- Application JavaScript Engine -->
     <script>
-        const CACHE_NAME = 'webmedia-ffmpeg-cache-v5';
+        const CACHE_NAME = 'webmedia-ffmpeg-v11-cache';
         const FILES = [
             { key: 'wasm', url: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm' },
             { key: 'js_ffmpeg', url: 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js' },
@@ -219,7 +174,6 @@
         let ffmpegInstance = null;
         let currentMode = 'audio';
         let selectedFile = null;
-        let pendingModalAction = null;
 
         window.switchTab = function(mode) {
             currentMode = mode;
@@ -283,7 +237,6 @@
 
                 statusTxt.innerText = "Waiting... Initializing FFmpeg script modules...";
 
-                // Load ffmpeg.min.js script into document
                 const jsBlob = await cachedFiles.js_ffmpeg.blob();
                 const jsUrl = URL.createObjectURL(jsBlob);
                 
@@ -291,7 +244,7 @@
                     const script = document.createElement('script');
                     script.src = jsUrl;
                     script.onload = resolve;
-                    script.onerror = () => reject(new Error('Failed to load ffmpeg.min.js script'));
+                    script.onerror = () => reject(new Error('Failed to load ffmpeg script'));
                     document.head.appendChild(script);
                 });
 
@@ -310,7 +263,7 @@
                         if (path.endsWith('.wasm')) return wasmUrl;
                         return path;
                     },
-                    logger: ({ message }) => console.log(message)
+                    log: true
                 });
 
                 statusTxt.innerText = "Waiting... Loading WebAssembly engine into memory...";
@@ -394,7 +347,6 @@
         };
 
         window.openModal = function(action) {
-            pendingModalAction = action;
             const modal = document.getElementById('custom-modal');
             const title = document.getElementById('modal-title');
             const desc = document.getElementById('modal-message');
@@ -414,7 +366,6 @@
 
         window.closeModal = function() {
             document.getElementById('custom-modal').classList.add('hidden');
-            pendingModalAction = null;
         };
 
         document.getElementById('modal-confirm-btn').onclick = async function() {
