@@ -56,16 +56,22 @@
     <div id="loading-overlay" class="w-full max-w-md px-4 mt-6">
         <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
             <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
-                <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="spinner-icon">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                 </svg>
             </div>
             <h3 id="load-title" class="font-semibold text-base text-white mb-1">Downloading FFmpeg Engine</h3>
             <p id="load-desc" class="text-xs text-slate-400 mb-4">Fetching core binaries from CDN and caching locally...</p>
             
-            <div class="py-3 px-4 bg-[#090d16] border border-slate-800 rounded-xl text-xs font-medium text-purple-300 animate-pulse" id="progress-status">
+            <div class="py-3 px-4 bg-[#090d16] border border-slate-800 rounded-xl text-xs font-medium text-purple-300 mb-4" id="progress-status">
                 Waiting... Please keep this page open while files download.
             </div>
+
+            <!-- Clear Data & Redownload Button in Loading/Error state -->
+            <button onclick="clearCacheAndReload()" class="w-full py-2.5 px-4 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-semibold text-xs transition-colors flex items-center justify-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span>Clear Cache & Redownload Fresh Files</span>
+            </button>
         </div>
     </div>
 
@@ -144,7 +150,7 @@
         <div class="flex justify-center space-x-4 pt-2">
             <button onclick="openModal('redownload')" class="text-xs text-slate-400 hover:text-purple-400 transition-colors underline">Redownload Resources</button>
             <span class="text-slate-700">•</span>
-            <button onclick="openModal('reset')" class="text-xs text-slate-400 hover:text-rose-400 transition-colors underline">Reset Cache</button>
+            <button onclick="clearCacheAndReload()" class="text-xs text-rose-400 hover:text-rose-300 transition-colors underline">Clear Data & Reset</button>
         </div>
 
     </main>
@@ -164,11 +170,13 @@
     </div>
 
     <script>
-        const CACHE_NAME = 'webmedia-ffmpeg-v11-cache';
+        const CACHE_NAME = 'webmedia-ffmpeg-cache-v11';
+        
+        // 3 Working CDNs for single-threaded v0.11 engine (avoids SharedArrayBuffer issue)
         const FILES = [
-            { key: 'wasm', url: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm' },
-            { key: 'js_ffmpeg', url: 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js' },
-            { key: 'core_js', url: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js' }
+            { key: 'wasm', url: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.6/dist/ffmpeg-core.wasm' },
+            { key: 'core_js', url: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.6/dist/ffmpeg-core.js' },
+            { key: 'js_ffmpeg', url: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js' }
         ];
 
         let ffmpegInstance = null;
@@ -224,32 +232,47 @@
                 const cache = await caches.open(CACHE_NAME);
                 let cachedFiles = {};
 
+                if (forceDownload) {
+                    await caches.delete(CACHE_NAME);
+                }
+
+                const currentCache = await caches.open(CACHE_NAME);
+
                 for (let fileObj of FILES) {
-                    let res = !forceDownload ? await cache.match(fileObj.url) : null;
-                    if (!res) {
+                    statusTxt.innerText = `Waiting... Checking ${fileObj.key} from cache/CDN...`;
+                    let res = await currentCache.match(fileObj.url);
+                    if (!res || forceDownload) {
                         statusTxt.innerText = `Waiting... Downloading ${fileObj.key} from CDN...`;
                         res = await fetch(fileObj.url);
-                        if (!res.ok) throw new Error(`Failed fetching ${fileObj.url}`);
-                        await cache.put(fileObj.url, res.clone());
+                        if (!res.ok) throw new Error(`Failed fetching ${fileObj.url} (Status ${res.status})`);
+                        await currentCache.put(fileObj.url, res.clone());
                     }
                     cachedFiles[fileObj.key] = res;
                 }
 
-                statusTxt.innerText = "Waiting... Initializing FFmpeg script modules...";
+                statusTxt.innerText = "Waiting... Extracting binaries and loading scripts...";
 
-                const jsBlob = await cachedFiles.js_ffmpeg.blob();
+                // Validate and read blobs to ensure cache isn't corrupted by a prior interrupted download
+                let jsBlob, coreJsBlob, wasmBlob;
+                try {
+                    jsBlob = await cachedFiles.js_ffmpeg.blob();
+                    coreJsBlob = await cachedFiles.core_js.blob();
+                    wasmBlob = await cachedFiles.wasm.blob();
+                } catch (blobErr) {
+                    console.warn("Corrupted cache detected from interrupted download. Clearing cache...", blobErr);
+                    await caches.delete(CACHE_NAME);
+                    throw new Error("Cached files were corrupted or incomplete. Please click 'Clear Cache & Redownload'.");
+                }
+
                 const jsUrl = URL.createObjectURL(jsBlob);
                 
                 await new Promise((resolve, reject) => {
                     const script = document.createElement('script');
                     script.src = jsUrl;
                     script.onload = resolve;
-                    script.onerror = () => reject(new Error('Failed to load ffmpeg script'));
+                    script.onerror = () => reject(new Error('Failed to load ffmpeg script module'));
                     document.head.appendChild(script);
                 });
-
-                const coreJsBlob = await cachedFiles.core_js.blob();
-                const wasmBlob = await cachedFiles.wasm.blob();
 
                 const coreJsUrl = URL.createObjectURL(coreJsBlob);
                 const wasmUrl = URL.createObjectURL(wasmBlob);
@@ -259,17 +282,14 @@
 
                 ffmpegInstance = createFFmpeg({
                     corePath: coreJsUrl,
-                    locateFile: (path) => {
-                        if (path.endsWith('.wasm')) return wasmUrl;
-                        return path;
-                    },
+                    locateFile: () => wasmUrl,
                     log: true
                 });
 
-                statusTxt.innerText = "Waiting... Loading WebAssembly engine into memory...";
+                statusTxt.innerText = "Waiting... Initializing WebAssembly engine into memory...";
                 await ffmpegInstance.load();
 
-                // Reveal Workspace
+                // Reveal Workspace successfully
                 loadingOverlay.classList.add('hidden');
                 appWorkspace.classList.remove('hidden');
 
@@ -279,10 +299,20 @@
 
             } catch (err) {
                 console.error(err);
-                statusTxt.innerText = "Error: " + err.message + ". Please try Redownloading.";
-                statusLabel.innerText = "Error Loading";
+                statusTxt.innerText = "Error: " + err.message;
+                statusLabel.innerText = "Load Failed";
             }
         }
+
+        window.clearCacheAndReload = async function() {
+            try {
+                await caches.delete(CACHE_NAME);
+                localStorage.clear();
+            } catch (e) {
+                console.error(e);
+            }
+            location.reload();
+        };
 
         window.processMedia = async function() {
             if (!selectedFile || !ffmpegInstance) return;
@@ -355,23 +385,16 @@
             if (action === 'redownload') {
                 title.innerText = "Redownload Resources";
                 desc.innerText = "This will clear your local cache and download fresh FFmpeg binary files from CDN. Proceed?";
-                confirmBtn.className = "py-2.5 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 transition-colors";
-            } else {
-                title.innerText = "Reset Application Cache";
-                desc.innerText = "This will clear all cached resources and reload the application. Proceed?";
-                confirmBtn.className = "py-2.5 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-500 transition-colors";
+                confirmBtn.onclick = async function() {
+                    closeModal();
+                    await clearCacheAndReload();
+                };
             }
             modal.classList.remove('hidden');
         };
 
         window.closeModal = function() {
             document.getElementById('custom-modal').classList.add('hidden');
-        };
-
-        document.getElementById('modal-confirm-btn').onclick = async function() {
-            closeModal();
-            await caches.delete(CACHE_NAME);
-            location.reload();
         };
 
         // Start initialization on window load
