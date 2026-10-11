@@ -5,39 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebMedia Studio Pro</title>
 
-    <!-- Inline Service Worker for enabling Cross-Origin Isolation (Fixes SharedArrayBuffer on GitHub Pages) -->
-    <script>
-        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-            const coiScript = `
-                self.addEventListener('install', () => self.skipWaiting());
-                self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
-                self.addEventListener('fetch', event => {
-                    if (event.request.cache === 'only-if-cached' && event.request.mode !== 'same-origin') return;
-                    event.respondWith(
-                        fetch(event.request).then(response => {
-                            if (response.status === 0) return response;
-                            const newHeaders = new Headers(response.headers);
-                            newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp');
-                            newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin');
-                            return new Response(response.body, {
-                                status: response.status,
-                                statusText: response.statusText,
-                                headers: newHeaders
-                            });
-                        }).catch(e => console.error(e))
-                    );
-                });
-            `;
-            const blob = new Blob([coiScript], { type: 'application/javascript' });
-            const coiUrl = URL.createObjectURL(blob);
-            navigator.serviceWorker.register(coiUrl).then(registration => {
-                if (registration.active && !navigator.serviceWorker.controller) {
-                    window.location.reload();
-                }
-            }).catch(() => {});
-        }
-    </script>
-
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -55,8 +22,8 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- FFmpeg Wrapper (v0.11.6) -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <!-- FFmpeg Single-Threaded Core Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #090d16; color: #f8fafc; }
@@ -72,7 +39,7 @@
             <div class="flex items-center space-x-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
                     <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 011.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
@@ -88,7 +55,7 @@
         </header>
     </div>
 
-    <!-- Initializing Card -->
+    <!-- Loading Screen Card -->
     <div id="loading-overlay" class="w-full max-w-md px-4 mt-6">
         <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
             <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
@@ -97,23 +64,23 @@
                 </svg>
             </div>
             <h3 class="font-semibold text-base text-white mb-1">Loading FFmpeg Engine</h3>
-            <p class="text-xs text-slate-400 mb-4">Fetching core binaries from local repository...</p>
+            <p class="text-xs text-slate-400 mb-4">Fetching single-threaded core binaries...</p>
             
             <div class="py-3 px-4 bg-[#090d16] border border-slate-800 rounded-xl text-xs font-medium text-purple-300 mb-4" id="progress-status">
                 Waiting... Please keep this page open.
             </div>
 
-            <button onclick="openModal('redownload')" class="w-full py-2.5 px-4 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-semibold text-xs transition-colors flex items-center justify-center space-x-2">
+            <button onclick="clearCacheAndReload()" class="w-full py-2.5 px-4 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-semibold text-xs transition-colors flex items-center justify-center space-x-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 <span>Clear Cache & Reload App</span>
             </button>
         </div>
     </div>
 
-    <!-- App Main Workspace -->
+    <!-- Main Workspace -->
     <main id="app-workspace" class="w-full max-w-md px-4 mt-6 space-y-4 hidden">
         
-        <!-- Mode Switcher -->
+        <!-- Mode Tabs -->
         <div class="grid grid-cols-2 gap-3">
             <button onclick="switchTab('audio')" id="tab-audio" class="py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
@@ -125,7 +92,7 @@
             </button>
         </div>
 
-        <!-- File Upload -->
+        <!-- Media Upload Zone -->
         <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl">
             <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
@@ -143,11 +110,11 @@
                     <p class="text-xs text-slate-300 font-medium mb-1" id="dropzone-text">Tap to upload audio (MP3, WAV, AAC)</p>
                     <p class="text-[10px] text-slate-500">Lossless direct processing in browser</p>
                 </div>
-                <input type="file" id="media-file-input" class="hidden" accept="audio/*,video/*" onchange="handleFileSelected(event)">
+                <input type="file" id="media-file-input" class="hidden" accept="audio/*" onchange="handleFileSelected(event)">
             </label>
         </div>
 
-        <!-- Process Controls -->
+        <!-- Controls -->
         <div id="controls-card" class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl hidden">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 mb-3 flex items-center space-x-2">
                 <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -171,40 +138,26 @@
             </button>
         </div>
 
-        <!-- Output Results -->
+        <!-- Output Card -->
         <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl">
             <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-3">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <span id="output-header-title">PROCESSED AUDIO OUTPUTS</span>
             </div>
             <div id="output-container" class="text-center py-6 text-slate-500 text-xs italic border border-dashed border-slate-800 rounded-xl">
-                No processed audio yet.
+                No processed file yet.
             </div>
         </div>
 
-        <!-- Cache Management Links -->
+        <!-- Reset Button -->
         <div class="flex justify-center space-x-4 pt-2">
-            <button onclick="openModal('redownload')" class="text-xs text-slate-400 hover:text-purple-400 transition-colors underline">Clear Cache & Reload App</button>
-            <span class="text-slate-700">•</span>
-            <button onclick="openModal('reset')" class="text-xs text-rose-400 hover:text-rose-300 transition-colors underline">Reset App Data</button>
+            <button onclick="clearCacheAndReload()" class="text-xs text-rose-400 hover:text-rose-300 transition-colors underline flex items-center space-x-1">
+                <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span>Clear Cache & Reload App</span>
+            </button>
         </div>
 
     </main>
-
-    <!-- Custom Modal Dialog -->
-    <div id="custom-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-[#131b2e] border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
-            <div id="modal-icon" class="w-12 h-12 mx-auto mb-3 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-            </div>
-            <h3 id="modal-title" class="text-base font-bold text-white mb-2">Confirm Action</h3>
-            <p id="modal-message" class="text-xs text-slate-300 mb-5">Are you sure you want to proceed?</p>
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="closeModal()" class="py-2.5 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancel</button>
-                <button id="modal-confirm-btn" class="py-2.5 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 transition-colors">Confirm</button>
-            </div>
-        </div>
-    </div>
 
     <script>
         let ffmpegInstance = null;
@@ -257,17 +210,17 @@
             const statusTxt = document.getElementById('progress-status');
 
             try {
-                statusTxt.innerText = "Waiting... Initializing cross-origin isolated environment...";
+                statusTxt.innerText = "Waiting... Initializing single-threaded engine...";
 
                 const { createFFmpeg } = FFmpeg;
 
-                // Pass relative path to ffmpeg-core.js directly in current repository
+                // Load Single-threaded core from CDN (Works 100% reliably on GitHub Pages)
                 ffmpegInstance = createFFmpeg({
-                    corePath: './ffmpeg-core.js',
-                    log: true
+                    corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+                    log: false
                 });
 
-                statusTxt.innerText = "Waiting... Loading WebAssembly binaries from local repository...";
+                statusTxt.innerText = "Waiting... Loading WebAssembly binaries...";
                 await ffmpegInstance.load();
 
                 loadingOverlay.classList.add('hidden');
@@ -369,34 +322,6 @@
                 processBtn.disabled = false;
                 processBtnText.innerText = "Process & Convert File";
             }
-        };
-
-        window.openModal = function(action) {
-            const modal = document.getElementById('custom-modal');
-            const title = document.getElementById('modal-title');
-            const desc = document.getElementById('modal-message');
-            const confirmBtn = document.getElementById('modal-confirm-btn');
-
-            if (action === 'redownload') {
-                title.innerText = "Clear Cache & Reload";
-                desc.innerText = "This will clear browser cache, local storage, and reload fresh files from your repository. Proceed?";
-                confirmBtn.onclick = async function() {
-                    closeModal();
-                    await clearCacheAndReload();
-                };
-            } else if (action === 'reset') {
-                title.innerText = "Reset App Data";
-                desc.innerText = "This will delete all cached resources and reload the application. Proceed?";
-                confirmBtn.onclick = async function() {
-                    closeModal();
-                    await clearCacheAndReload();
-                };
-            }
-            modal.classList.remove('hidden');
-        };
-
-        window.closeModal = function() {
-            document.getElementById('custom-modal').classList.add('hidden');
         };
 
         window.onload = function() {
