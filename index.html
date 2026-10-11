@@ -22,7 +22,7 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- FFmpeg Wrapper from CDN -->
+    <!-- FFmpeg Wrapper (v0.11.6) from CDN -->
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     
     <style>
@@ -61,8 +61,8 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                 </svg>
             </div>
-            <h3 class="font-semibold text-base text-white mb-1">Loading Local FFmpeg Binaries</h3>
-            <p class="text-xs text-slate-400 mb-4">Fetching core files from local repository...</p>
+            <h3 class="font-semibold text-base text-white mb-1">Loading FFmpeg Engine</h3>
+            <p class="text-xs text-slate-400 mb-4">Fetching core binaries from local repository...</p>
             
             <div class="py-3 px-4 bg-[#090d16] border border-slate-800 rounded-xl text-xs font-medium text-purple-300 mb-4" id="progress-status">
                 Waiting... Please keep this page open.
@@ -70,7 +70,7 @@
 
             <button onclick="openModal('redownload')" class="w-full py-2.5 px-4 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 font-semibold text-xs transition-colors flex items-center justify-center space-x-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                <span>Clear Cache & Redownload Fresh Files</span>
+                <span>Clear Cache & Reload App</span>
             </button>
         </div>
     </div>
@@ -148,7 +148,7 @@
 
         <!-- Cache Management Links -->
         <div class="flex justify-center space-x-4 pt-2">
-            <button onclick="openModal('redownload')" class="text-xs text-slate-400 hover:text-purple-400 transition-colors underline">Clear Cache & Redownload Fresh Files</button>
+            <button onclick="openModal('redownload')" class="text-xs text-slate-400 hover:text-purple-400 transition-colors underline">Clear Cache & Reload App</button>
             <span class="text-slate-700">•</span>
             <button onclick="openModal('reset')" class="text-xs text-rose-400 hover:text-rose-300 transition-colors underline">Reset App Data</button>
         </div>
@@ -170,15 +170,6 @@
     </div>
 
     <script>
-        const CACHE_NAME = 'webmedia-local-cache-v1';
-        
-        // Local files loaded directly from GitHub repository root
-        const FILES = {
-            core_js: './ffmpeg-core.js',
-            wasm: './ffmpeg-core.wasm',
-            worker: './ffmpeg-core.worker.js'
-        };
-
         let ffmpegInstance = null;
         let currentMode = 'audio';
         let selectedFile = null;
@@ -220,7 +211,7 @@
             document.getElementById('controls-card').classList.remove('hidden');
         };
 
-        async function initApp(forceDownload = false) {
+        async function initApp() {
             const statusLabel = document.getElementById('status-label');
             const statusDot = document.getElementById('status-dot');
             const statusBadge = document.getElementById('status-badge');
@@ -229,44 +220,11 @@
             const statusTxt = document.getElementById('progress-status');
 
             try {
-                if (forceDownload) {
-                    await caches.delete(CACHE_NAME);
-                }
-
-                const cache = await caches.open(CACHE_NAME);
-                let cachedFiles = {};
-
-                for (let key in FILES) {
-                    const url = FILES[key];
-                    statusTxt.innerText = `Waiting... Checking local file ${key}...`;
-                    let res = await cache.match(url);
-                    if (!res || forceDownload) {
-                        statusTxt.innerText = `Waiting... Loading local file ${key} from repository...`;
-                        res = await fetch(url);
-                        if (!res.ok) throw new Error(`Failed loading local file ${url} (Status ${res.status}). Please ensure ${key} is uploaded in your GitHub repository.`);
-                        await cache.put(url, res.clone());
-                    }
-                    cachedFiles[key] = res;
-                }
-
-                statusTxt.innerText = "Waiting... Extracting local binaries and initializing engine...";
-
-                let coreJsBlob, wasmBlob;
-                try {
-                    coreJsBlob = await cachedFiles.core_js.blob();
-                    wasmBlob = await cachedFiles.wasm.blob();
-                } catch (blobErr) {
-                    console.warn("Corrupted cache detected. Clearing cache...", blobErr);
-                    await caches.delete(CACHE_NAME);
-                    throw new Error("Local cache files were incomplete. Please click 'Clear Cache & Redownload Fresh Files'.");
-                }
-
-                const coreURL = URL.createObjectURL(coreJsBlob);
-                const wasmURL = URL.createObjectURL(wasmBlob);
+                statusTxt.innerText = "Waiting... Loading FFmpeg core from local repository...";
 
                 const { createFFmpeg } = FFmpeg;
                 ffmpegInstance = createFFmpeg({
-                    corePath: coreURL,
+                    corePath: './ffmpeg-core.js',
                     log: true
                 });
 
@@ -282,19 +240,25 @@
 
             } catch (err) {
                 console.error(err);
-                statusTxt.innerText = "Error: " + err.message;
+                statusTxt.innerText = "Error: " + err.message + ". Please ensure ffmpeg-core.js, ffmpeg-core.wasm, and ffmpeg-core.worker.js are in your repository root.";
                 statusLabel.innerText = "Load Failed";
             }
         }
 
         window.clearCacheAndReload = async function() {
             try {
-                await caches.delete(CACHE_NAME);
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    for (let key of keys) {
+                        await caches.delete(key);
+                    }
+                }
                 localStorage.clear();
+                sessionStorage.clear();
             } catch (e) {
                 console.error(e);
             }
-            location.reload();
+            location.reload(true);
         };
 
         window.processMedia = async function() {
@@ -367,8 +331,8 @@
             const confirmBtn = document.getElementById('modal-confirm-btn');
 
             if (action === 'redownload') {
-                title.innerText = "Clear Cache & Redownload";
-                desc.innerText = "This will clear your local storage cache and reload fresh binary files from your repository. Proceed?";
+                title.innerText = "Clear Cache & Reload";
+                desc.innerText = "This will clear browser cache, local storage, and reload fresh files from your repository. Proceed?";
                 confirmBtn.onclick = async function() {
                     closeModal();
                     await clearCacheAndReload();
