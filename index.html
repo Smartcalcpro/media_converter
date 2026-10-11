@@ -62,12 +62,8 @@
             <h3 id="load-title" class="font-semibold text-base text-white mb-1">Downloading FFmpeg Engine</h3>
             <p id="load-desc" class="text-xs text-slate-400 mb-4">Fetching core binaries from CDN and caching locally...</p>
             
-            <div class="w-full bg-slate-800 rounded-full h-2.5 mb-2 overflow-hidden">
-                <div id="progress-bar-fill" class="bg-gradient-to-r from-purple-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-            </div>
-            <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-                <span id="progress-percent">0%</span>
-                <span id="progress-status">Connecting...</span>
+            <div class="py-3 px-4 bg-[#090d16] border border-slate-800 rounded-xl text-xs font-medium text-purple-300 animate-pulse" id="progress-status">
+                Waiting... Please keep this page open while files download.
             </div>
         </div>
     </div>
@@ -91,7 +87,7 @@
             <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
                     <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                    <span id="upload-label-title">Select Audio File</span>
+                    <span id="upload-label-title">SELECT AUDIO FILE</span>
                 </div>
                 <span id="file-chosen-name" class="text-xs text-slate-400 font-medium truncate max-w-[150px]">No file chosen</span>
             </div>
@@ -136,10 +132,10 @@
         <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl">
             <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-3">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span id="output-header-title">Processed Outputs</span>
+                <span id="output-header-title">PROCESSED AUDIO OUTPUTS</span>
             </div>
             <div id="output-container" class="text-center py-6 text-slate-500 text-xs italic border border-dashed border-slate-800 rounded-xl">
-                No processed media yet.
+                No processed audio yet.
             </div>
         </div>
 
@@ -166,18 +162,15 @@
         </div>
     </div>
 
-    <script type="module">
-        import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
-        import { toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
+    <script>
+        const CACHE_NAME = 'webmedia-ffmpeg-cache-v4';
+        const FILES = [
+            { key: 'wasm', url: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm' },
+            { key: 'js_ffmpeg', url: 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js' },
+            { key: 'core_js', url: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js' }
+        ];
 
-        const CACHE_NAME = 'webmedia-ffmpeg-storage-v3';
-        const FILES = {
-            js: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
-            wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm',
-            worker: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.worker.js'
-        };
-
-        let ffmpeg = null;
+        let ffmpegInstance = null;
         let currentMode = 'audio';
         let selectedFile = null;
         let pendingModalAction = null;
@@ -194,17 +187,17 @@
             if (mode === 'audio') {
                 btnAudio.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30";
                 btnVideo.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all bg-[#131b2e] border border-slate-800 text-slate-400 hover:text-white hover:bg-[#1c2844]";
-                uploadTitle.innerText = "Select Audio File";
+                uploadTitle.innerText = "SELECT AUDIO FILE";
                 dropText.innerText = "Tap to upload audio (MP3, WAV, AAC)";
                 fileInput.accept = "audio/*";
-                outputHeader.innerText = "Processed Audio Outputs";
+                outputHeader.innerText = "PROCESSED AUDIO OUTPUTS";
             } else {
                 btnVideo.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30";
                 btnAudio.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all bg-[#131b2e] border border-slate-800 text-slate-400 hover:text-white hover:bg-[#1c2844]";
-                uploadTitle.innerText = "Select Video File";
+                uploadTitle.innerText = "SELECT VIDEO FILE";
                 dropText.innerText = "Tap to upload video (MP4, MKV, MOV)";
                 fileInput.accept = "video/*";
-                outputHeader.innerText = "Processed Video Outputs";
+                outputHeader.innerText = "PROCESSED VIDEO OUTPUTS";
             }
             selectedFile = null;
             document.getElementById('file-chosen-name').innerText = "No file chosen";
@@ -219,57 +212,63 @@
             document.getElementById('controls-card').classList.remove('hidden');
         };
 
-        async function initFFmpegEngine(forceDownload = false) {
+        async function initApp(forceDownload = false) {
             const statusLabel = document.getElementById('status-label');
             const statusDot = document.getElementById('status-dot');
             const statusBadge = document.getElementById('status-badge');
             const loadingOverlay = document.getElementById('loading-overlay');
             const appWorkspace = document.getElementById('app-workspace');
-            const fill = document.getElementById('progress-bar-fill');
-            const pct = document.getElementById('progress-percent');
             const statusTxt = document.getElementById('progress-status');
 
             try {
                 const cache = await caches.open(CACHE_NAME);
-                let jsRes = !forceDownload ? await cache.match(FILES.js) : null;
-                let wasmRes = !forceDownload ? await cache.match(FILES.wasm) : null;
-                let workerRes = !forceDownload ? await cache.match(FILES.worker) : null;
+                let cachedFiles = {};
 
-                if (!jsRes || !wasmRes || !workerRes) {
-                    statusTxt.innerText = "Downloading FFmpeg Core Binaries (~32MB)...";
-                    
-                    [jsRes, wasmRes, workerRes] = await Promise.all([
-                        fetchWithProgress(FILES.js, cache, (p) => {
-                            fill.style.width = `${Math.round(p * 0.3)}%`;
-                            pct.innerText = `${Math.round(p * 0.3)}%`;
-                        }),
-                        fetchWithProgress(FILES.wasm, cache, (p) => {
-                            const val = 30 + Math.round(p * 0.6);
-                            fill.style.width = `${val}%`;
-                            pct.innerText = `${val}%`;
-                        }),
-                        fetchWithProgress(FILES.worker, cache, (p) => {
-                            fill.style.width = `100%`;
-                            pct.innerText = `100%`;
-                        })
-                    ]);
-                } else {
-                    fill.style.width = '100%';
-                    pct.innerText = '100%';
-                    statusTxt.innerText = "Loaded from browser storage instantly!";
+                for (let fileObj of FILES) {
+                    let res = !forceDownload ? await cache.match(fileObj.url) : null;
+                    if (!res) {
+                        statusTxt.innerText = `Waiting... Downloading ${fileObj.key} from CDN...`;
+                        res = await fetch(fileObj.url);
+                        if (!res.ok) throw new Error(`Failed fetching ${fileObj.url}`);
+                        await cache.put(fileObj.url, res.clone());
+                    }
+                    cachedFiles[fileObj.key] = res;
                 }
 
-                statusTxt.innerText = "Initializing WebAssembly module...";
-                const jsBlob = await jsRes.blob();
-                const wasmBlob = await wasmRes.blob();
-                const workerBlob = await workerRes.blob();
+                statusTxt.innerText = "Waiting... Initializing FFmpeg script modules...";
 
-                const coreURL = URL.createObjectURL(jsBlob);
-                const wasmURL = URL.createObjectURL(wasmBlob);
-                const workerURL = URL.createObjectURL(workerBlob);
+                // Load ffmpeg.min.js script into document
+                const jsBlob = await cachedFiles.js_ffmpeg.blob();
+                const jsUrl = URL.createObjectURL(jsBlob);
+                
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = jsUrl;
+                    script.onload = resolve;
+                    script.onerror = () => reject(new Error('Failed to load ffmpeg.min.js script'));
+                    document.head.appendChild(script);
+                });
 
-                ffmpeg = new FFmpeg();
-                await ffmpeg.load({ coreURL, wasmURL, workerURL });
+                const coreJsBlob = await cachedFiles.core_js.blob();
+                const wasmBlob = await cachedFiles.wasm.blob();
+
+                const coreJsUrl = URL.createObjectURL(coreJsBlob);
+                const wasmUrl = URL.createObjectURL(wasmBlob);
+
+                const { createFFmpeg, fetchFile } = FFmpeg;
+                window.FFmpegFetchFile = fetchFile;
+
+                ffmpegInstance = createFFmpeg({
+                    corePath: coreJsUrl,
+                    locateFile: (path) => {
+                        if (path.endsWith('.wasm')) return wasmUrl;
+                        return path;
+                    },
+                    logger: ({ message }) => console.log(message)
+                });
+
+                statusTxt.innerText = "Waiting... Loading WebAssembly engine into memory...";
+                await ffmpegInstance.load();
 
                 // Reveal Workspace
                 loadingOverlay.classList.add('hidden');
@@ -281,47 +280,13 @@
 
             } catch (err) {
                 console.error(err);
-                statusTxt.innerText = "Error: " + err.message;
+                statusTxt.innerText = "Error: " + err.message + ". Please try Redownloading.";
                 statusLabel.innerText = "Error Loading";
             }
         }
 
-        async function fetchWithProgress(url, cache, onProgress) {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Failed fetching ${url}`);
-            const total = parseInt(response.headers.get('content-length'), 10);
-            if (!total) {
-                await cache.put(url, response.clone());
-                onProgress(100);
-                return response;
-            }
-
-            let loaded = 0;
-            const reader = response.body.getReader();
-            const chunks = [];
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value);
-                loaded += value.length;
-                onProgress(Math.round((loaded / total) * 100));
-            }
-
-            const body = new Uint8Array(loaded);
-            let pos = 0;
-            for (let chunk of chunks) {
-                body.set(chunk, pos);
-                pos += chunk.length;
-            }
-
-            const newRes = new Response(body, { headers: response.headers });
-            await cache.put(url, newRes.clone());
-            return newRes;
-        }
-
         window.processMedia = async function() {
-            if (!selectedFile || !ffmpeg) return;
+            if (!selectedFile || !ffmpegInstance) return;
 
             const processBtn = document.getElementById('process-btn');
             const processBtnText = document.getElementById('process-btn-text');
@@ -332,8 +297,8 @@
                 const inputName = 'input_file';
                 const outputName = currentMode === 'audio' ? 'output.mp3' : 'output.mp4';
                 
-                const fileData = await selectedFile.arrayBuffer();
-                await ffmpeg.writeFile(inputName, new Uint8Array(fileData));
+                const fileData = await window.FFmpegFetchFile(selectedFile);
+                ffmpegInstance.FS('writeFile', inputName, fileData);
 
                 const startTime = document.getElementById('start-time').value || '0';
                 const duration = document.getElementById('duration-time').value;
@@ -346,12 +311,12 @@
                 if (currentMode === 'audio') {
                     args.push('-c:a', 'libmp3lame', outputName);
                 } else {
-                    args.push('-c', 'copy', outputName); // Lossless direct stream copy
+                    args.push('-c', 'copy', outputName);
                 }
 
-                await ffmpeg.exec(args);
+                await ffmpegInstance.run(...args);
 
-                const data = await ffmpeg.readFile(outputName);
+                const data = ffmpegInstance.FS('readFile', outputName);
                 const blob = new Blob([data.buffer], { type: currentMode === 'audio' ? 'audio/mpeg' : 'video/mp4' });
                 const url = URL.createObjectURL(blob);
 
@@ -391,11 +356,11 @@
 
             if (action === 'redownload') {
                 title.innerText = "Redownload Resources";
-                desc.innerText = "This will clear your local storage cache and download fresh FFmpeg binary files from CDN. Proceed?";
+                desc.innerText = "This will clear your local cache and download fresh FFmpeg binary files from CDN. Proceed?";
                 confirmBtn.className = "py-2.5 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 transition-colors";
             } else {
                 title.innerText = "Reset Application Cache";
-                desc.innerText = "This will clear all cached resources and reload the application from scratch. Proceed?";
+                desc.innerText = "This will clear all cached resources and reload the application. Proceed?";
                 confirmBtn.className = "py-2.5 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-500 transition-colors";
             }
             modal.classList.remove('hidden');
@@ -407,18 +372,15 @@
         };
 
         document.getElementById('modal-confirm-btn').onclick = async function() {
-            if (pendingModalAction === 'redownload') {
-                closeModal();
-                await caches.delete(CACHE_NAME);
-                location.reload();
-            } else if (pendingModalAction === 'reset') {
-                await caches.delete(CACHE_NAME);
-                location.reload();
-            }
+            closeModal();
+            await caches.delete(CACHE_NAME);
+            location.reload();
         };
 
-        // Initialize application on load
-        initFFmpegEngine();
+        // Start initialization on window load
+        window.onload = function() {
+            initApp();
+        };
     </script>
 </body>
 </html>
