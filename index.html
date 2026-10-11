@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebMedia Studio Pro</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#090d16',
+                        cardBg: '#131b2e',
+                        cardHover: '#1c2844',
+                        accentGrad1: '#8b5cf6',
+                        accentGrad2: '#6366f1',
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #090d16; color: #f8fafc; }
+        .gradient-border {
+            background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+            padding: 1px;
+            border-radius: 1rem;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen pb-12 flex flex-col items-center">
+
+    <div class="w-full max-w-md px-4 pt-6">
+        <header class="bg-[#131b2e] border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-xl">
+            <div class="flex items-center space-x-3">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-white leading-tight">WebMedia Studio Pro</h1>
+                    <p class="text-xs text-slate-400">100% Offline Lossless Direct-Stream Slicing</p>
+                </div>
+            </div>
+            <div id="status-badge" class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-medium text-amber-400">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" id="status-dot"></span>
+                <span id="status-label">Initializing...</span>
+            </div>
+        </header>
+    </div>
+
+    <div id="loading-overlay" class="w-full max-w-md px-4 mt-6">
+        <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
+                <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                </svg>
+            </div>
+            <h3 id="load-title" class="font-semibold text-base text-white mb-1">Preparing FFmpeg Engine</h3>
+            <p id="load-desc" class="text-xs text-slate-400 mb-4">Downloading core assets (approx 32MB) for future offline use...</p>
+            
+            <div class="w-full bg-slate-800 rounded-full h-2.5 mb-2 overflow-hidden">
+                <div id="progress-bar-fill" class="bg-gradient-to-r from-purple-500 to-indigo-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between text-[11px] text-slate-400 font-mono">
+                <span id="progress-percent">0%</span>
+                <span id="progress-status">Connecting...</span>
+            </div>
+        </div>
+    </div>
+
+    <main id="app-workspace" class="w-full max-w-md px-4 mt-6 space-y-4 hidden">
+        
+        <!-- Navigation Studio Tabs -->
+        <div class="grid grid-cols-2 gap-3">
+            <button onclick="switchTab('audio')" id="tab-audio" class="py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path></svg>
+                <span>Audio (MP3)</span>
+            </button>
+            <button onclick="switchTab('video')" id="tab-video" class="py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all bg-[#131b2e] border border-slate-800 text-slate-400 hover:text-white hover:bg-[#1c2844]">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                <span>Video Studio</span>
+            </button>
+        </div>
+
+        <!-- File Upload Card -->
+        <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    <span id="upload-label-title">Select Audio File</span>
+                </div>
+                <span id="file-chosen-name" class="text-xs text-slate-400 font-medium truncate max-w-[150px]">No file chosen</span>
+            </div>
+
+            <label class="relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-700 hover:border-purple-500 rounded-xl cursor-pointer bg-[#090d16]/50 hover:bg-[#090d16] transition-all group">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center">
+                    <div class="w-10 h-10 mb-2 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    </div>
+                    <p class="text-xs text-slate-300 font-medium mb-1" id="dropzone-text">Tap to upload audio (MP3, WAV, AAC)</p>
+                    <p class="text-[10px] text-slate-500">Lossless direct processing in browser</p>
+                </div>
+                <input type="file" id="media-file-input" class="hidden" accept="audio/*,video/*" onchange="handleFileSelected(event)">
+            </label>
+        </div>
+
+        <!-- Trimming & Slicing Controls -->
+        <div id="controls-card" class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl hidden">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 mb-3 flex items-center space-x-2">
+                <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Slicing & Conversion Options</span>
+            </h3>
+            
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Start Time (seconds)</label>
+                    <input type="number" id="start-time" value="0" min="0" step="0.1" class="w-full bg-[#090d16] border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Duration (seconds)</label>
+                    <input type="number" id="duration-time" value="0" min="0" step="0.1" placeholder="0 for full" class="w-full bg-[#090d16] border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500">
+                </div>
+            </div>
+
+            <button onclick="processMedia()" id="process-btn" class="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-900/40 hover:opacity-95 transition-opacity flex items-center justify-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <span id="process-btn-text">Process & Convert File</span>
+            </button>
+        </div>
+
+        <!-- Processed Output Section -->
+        <div class="bg-[#131b2e] border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-3">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Processed Outputs</span>
+            </div>
+            <div id="output-container" class="text-center py-6 text-slate-500 text-xs italic border border-dashed border-slate-800 rounded-xl">
+                No processed media yet.
+            </div>
+        </div>
+
+        <!-- Cache Management Footer Tools -->
+        <div class="flex justify-center space-x-4 pt-2">
+            <button onclick="openModal('redownload')" class="text-xs text-slate-400 hover:text-purple-400 transition-colors underline">Redownload Resources</button>
+            <span class="text-slate-700">•</span>
+            <button onclick="openModal('reset')" class="text-xs text-slate-400 hover:text-rose-400 transition-colors underline">Reset Cache</button>
+        </div>
+
+    </main>
+
+    <div id="custom-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-[#131b2e] border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
+            <div id="modal-icon" class="w-12 h-12 mx-auto mb-3 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h3 id="modal-title" class="text-base font-bold text-white mb-2">Confirm Action</h3>
+            <p id="modal-message" class="text-xs text-slate-300 mb-5">Are you sure you want to proceed?</p>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeModal()" class="py-2.5 px-4 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors">Cancel</button>
+                <button id="modal-confirm-btn" class="py-2.5 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 transition-colors">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+        import { toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
+
+        const CACHE_NAME = 'webmedia-ffmpeg-cache-v2';
+        const FILES = {
+            js: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+            wasm: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.wasm'
+        };
+
+        let ffmpeg = null;
+        let currentMode = 'audio';
+        let selectedFile = null;
+        let pendingModalAction = null;
+
+        window.switchTab = function(mode) {
+            currentMode = mode;
+            const btnAudio = document.getElementById('tab-audio');
+            const btnVideo = document.getElementById('tab-video');
+            const uploadTitle = document.getElementById('upload-label-title');
+            const dropText = document.getElementById('dropzone-text');
+            const fileInput = document.getElementById('media-file-input');
+
+            if (mode === 'audio') {
+                btnAudio.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30";
+                btnVideo.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all bg-[#131b2e] border border-slate-800 text-slate-400 hover:text-white hover:bg-[#1c2844]";
+                uploadTitle.innerText = "Select Audio File";
+                dropText.innerText = "Tap to upload audio (MP3, WAV, AAC)";
+                fileInput.accept = "audio/*";
+            } else {
+                btnVideo.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all shadow-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-purple-900/30";
+                btnAudio.className = "py-3.5 px-4 rounded-2xl font-semibold text-sm flex items-center justify-center space-x-2 transition-all bg-[#131b2e] border border-slate-800 text-slate-400 hover:text-white hover:bg-[#1c2844]";
+                uploadTitle.innerText = "Select Video File";
+                dropText.innerText = "Tap to upload video (MP4, MKV, MOV)";
+                fileInput.accept = "video/*";
+            }
+            selectedFile = null;
+            document.getElementById('file-chosen-name').innerText = "No file chosen";
+            document.getElementById('controls-card').classList.add('hidden');
+        };
+
+        window.handleFileSelected = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            selectedFile = file;
+            document.getElementById('file-chosen-name').innerText = file.name;
+            document.getElementById('controls-card').classList.remove('hidden');
+        };
+
+        async function initFFmpegEngine(forceDownload = false) {
+            const statusLabel = document.getElementById('status-label');
+            const statusDot = document.getElementById('status-dot');
+            const statusBadge = document.getElementById('status-badge');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const appWorkspace = document.getElementById('app-workspace');
+            const fill = document.getElementById('progress-bar-fill');
+            const pct = document.getElementById('progress-percent');
+            const statusTxt = document.getElementById('progress-status');
+
+            try {
+                const cache = await caches.open(CACHE_NAME);
+                let jsRes = !forceDownload ? await cache.match(FILES.js) : null;
+                let wasmRes = !forceDownload ? await cache.match(FILES.wasm) : null;
+
+                if (!jsRes || !wasmRes) {
+                    statusTxt.innerText = "Downloading FFmpeg Core (32MB)...";
+                    
+                    [jsRes, wasmRes] = await Promise.all([
+                        fetchWithProgress(FILES.js, cache, (p) => {
+                            fill.style.width = `${Math.round(p/2)}%`;
+                            pct.innerText = `${Math.round(p/2)}%`;
+                        }),
+                        fetchWithProgress(FILES.wasm, cache, (p) => {
+                            const val = 50 + Math.round(p/2);
+                            fill.style.width = `${val}%`;
+                            pct.innerText = `${val}%`;
+                        })
+                    ]);
+                } else {
+                    fill.style.width = '100%';
+                    pct.innerText = '100%';
+                    statusTxt.innerText = "Loaded from local cache instantly!";
+                }
+
+                statusTxt.innerText = "Initializing WASM module...";
+                const jsBlob = await jsRes.blob();
+                const wasmBlob = await wasmRes.blob();
+
+                const coreURL = URL.createObjectURL(jsBlob);
+                const wasmURL = URL.createObjectURL(wasmBlob);
+
+                ffmpeg = new FFmpeg();
+                await ffmpeg.load({ coreURL, wasmURL });
+
+                // Ready UI
+                loadingOverlay.classList.add('hidden');
+                appWorkspace.classList.remove('hidden');
+
+                statusBadge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800 text-xs font-medium text-emerald-400";
+                statusDot.className = "w-2 h-2 rounded-full bg-emerald-400";
+                statusLabel.innerText = "Offline Ready";
+
+            } catch (err) {
+                console.error(err);
+                statusTxt.innerText = "Error: " + err.message;
+                statusLabel.innerText = "Error Loading";
+            }
+        }
+
+        async function fetchWithProgress(url, cache, onProgress) {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed fetching ${url}`);
+            const total = parseInt(response.headers.get('content-length'), 10);
+            if (!total) {
+                await cache.put(url, response.clone());
+                onProgress(100);
+                return response;
+            }
+
+            let loaded = 0;
+            const reader = response.body.getReader();
+            const chunks = [];
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                loaded += value.length;
+                onProgress(Math.round((loaded / total) * 100));
+            }
+
+            const body = new Uint8Array(loaded);
+            let pos = 0;
+            for (let chunk of chunks) {
+                body.set(chunk, pos);
+                pos += chunk.length;
+            }
+
+            const newRes = new Response(body, { headers: response.headers });
+            await cache.put(url, newRes.clone());
+            return newRes;
+        }
+
+        window.processMedia = async function() {
+            if (!selectedFile || !ffmpeg) return;
+
+            const processBtn = document.getElementById('process-btn');
+            const processBtnText = document.getElementById('process-btn-text');
+            processBtn.disabled = true;
+            processBtnText.innerText = "Processing...";
+
+            try {
+                const inputName = 'input_file';
+                const outputName = currentMode === 'audio' ? 'output.mp3' : 'output.mp4';
+                
+                const fileData = await selectedFile.arrayBuffer();
+                await ffmpeg.writeFile(inputName, new Uint8Array(fileData));
+
+                const startTime = document.getElementById('start-time').value || '0';
+                const duration = document.getElementById('duration-time').value;
+
+                let args = ['-ss', startTime, '-i', inputName];
+                if (duration && parseFloat(duration) > 0) {
+                    args.push('-t', duration);
+                }
+
+                if (currentMode === 'audio') {
+                    args.push('-c:a', 'libmp3lame', outputName);
+                } else {
+                    args.push('-c', 'copy', outputName); // Lossless direct stream copy
+                }
+
+                await ffmpeg.exec(args);
+
+                const data = await ffmpeg.readFile(outputName);
+                const blob = new Blob([data.buffer], { type: currentMode === 'audio' ? 'audio/mpeg' : 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+
+                const outputContainer = document.getElementById('output-container');
+                outputContainer.innerHTML = `
+                    <div class="space-y-3 text-left bg-[#090d16] p-4 rounded-xl border border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-white truncate max-w-[200px]">${outputName}</span>
+                            <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-mono">Success</span>
+                        </div>
+                        ${currentMode === 'audio' ? 
+                            `<audio controls src="${url}" class="w-full h-9"></audio>` : 
+                            `<video controls src="${url}" class="w-full rounded-lg max-h-40 bg-black"></video>`
+                        }
+                        <a href="${url}" download="${outputName}" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center space-x-2 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            <span>Download Processed File</span>
+                        </a>
+                    </div>
+                `;
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('output-container').innerHTML = `<p class="text-xs text-rose-400">Processing Error: ${err.message}</p>`;
+            } finally {
+                processBtn.disabled = false;
+                processBtnText.innerText = "Process & Convert File";
+            }
+        };
+
+        window.openModal = function(action) {
+            pendingModalAction = action;
+            const modal = document.getElementById('custom-modal');
+            const title = document.getElementById('modal-title');
+            const desc = document.getElementById('modal-message');
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+
+            if (action === 'redownload') {
+                title.innerText = "Redownload Resources";
+                desc.innerText = "This will clear your local FFmpeg cache and download fresh core files from CDN. Proceed?";
+                confirmBtn.className = "py-2.5 px-4 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 transition-colors";
+            } else {
+                title.innerText = "Reset Application Cache";
+                desc.innerText = "This will clear all cached resources and reload the application from scratch. Proceed?";
+                confirmBtn.className = "py-2.5 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-500 transition-colors";
+            }
+            modal.classList.remove('hidden');
+        };
+
+        window.closeModal = function() {
+            document.getElementById('custom-modal').classList.add('hidden');
+            pendingModalAction = null;
+        };
+
+        document.getElementById('modal-confirm-btn').onclick = async function() {
+            if (pendingModalAction === 'redownload') {
+                closeModal();
+                await caches.delete(CACHE_NAME);
+                location.reload();
+            } else if (pendingModalAction === 'reset') {
+                await caches.delete(CACHE_NAME);
+                location.reload();
+            }
+        };
+
+        // Run initialization on load
+        initFFmpegEngine();
+    </script>
+</body>
+</html>
